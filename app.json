@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "RideSafe",
+    "slug": "ridesafe-mvp",
+    "scheme": "ridesafe",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "plugins": [
+      "expo-router",
+      ["expo-location", {
+        "locationWhenInUsePermission": "RideSafe uses your location when you choose to share it.",
+        "locationAlwaysAndWhenInUsePermission": "RideSafe can keep sharing your location during an active safety session."
+      }],
+      ["expo-notifications", {"sounds": []}],
+      "expo-secure-store"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "am.ridesafe.mvp",
+      "infoPlist": {
+        "UIBackgroundModes": ["location"]
+      }
+    },
+    "android": {
+      "package": "am.ridesafe.mvp",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "extra": {
+      "router": {"origin": false}
+    }
+  }
+}

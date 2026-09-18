@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+
+  <title>RideSafe Live Location</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      background: #f5f6f8;
+      margin: 0;
+      color: #071b4d;
+    }
+
+    .wrap {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .brand {
+      font-size: 30px;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid #e5e8ef;
+      border-radius: 20px;
+      padding: 20px;
+      margin-bottom: 14px;
+
+      box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.04);
+    }
+
+    .status {
+      font-weight: 800;
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+
+    .muted {
+      color: #6f7888;
+    }
+
+    .danger {
+      color: #a00000;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .map {
+      min-height: 250px;
+      border-radius: 16px;
+      background: #eef3fb;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      text-align: center;
+      padding: 24px;
+      margin-top: 18px;
+    }
+
+    .button {
+      display: inline-block;
+      background: #1457ee;
+      color: #ffffff;
+
+      padding: 13px 18px;
+      border-radius: 12px;
+
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .updated {
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .privacy {
+      text-align: center;
+      color: #7b8494;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="wrap">
+
+    <div class="brand">
+      RideSafe
+    </div>
+
+    <div
+      id="app"
+      class="card"
+    >
+      Loading live location…
+    </div>
+
+    <div class="privacy">
+      This private RideSafe link provides access to the
+      location shared for this safety session.
+    </div>
+
+  </div>
+
+  <script>
+
+    const SUPABASE_URL =
+      'https://imibxhnithmucdlsihcr.supabase.co';
+
+    const ANON_KEY =
+      'sb_publishable_wuAhS3Lvm7_5l83aw8aCbg_VByaL8N0';
+
+    const token =
+      new URLSearchParams(
+        window.location.search
+      ).get('token');
+
+    const app =
+      document.getElementById('app');
+
+
+    async function rpc(
+      name,
+      body
+    ) {
+
+      const response =
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/rpc/${name}`,
+          {
+            method: 'POST',
+
+            headers: {
+              apikey: ANON_KEY,
+
+              Authorization:
+                `Bearer ${ANON_KEY}`,
+
+              'Content-Type':
+                'application/json',
+            },
+
+            body:
+              JSON.stringify(body),
+          }
+        );
+
+
+      if (!response.ok) {
+
+        const errorText =
+          await response.text();
+
+        throw new Error(
+          errorText
+        );
+      }
+
+
+      return response.json();
+    }
+
+
+    function escapeHtml(value) {
+
+      return String(value ?? '')
+        .replace(
+          /[&<>"']/g,
+          character => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          })[character]
+        );
+    }
+
+
+    function formatAge(
+      dateString
+    ) {
+
+      if (!dateString) {
+        return 'Waiting for first location update';
+      }
+
+
+      const seconds =
+        Math.floor(
+          (
+            Date.now() -
+            new Date(dateString).getTime()
+          ) / 1000
+        );
+
+
+      if (seconds < 10) {
+        return 'Updated just now';
+      }
+
+
+      if (seconds < 60) {
+        return `Updated ${seconds} seconds ago`;
+      }
+
+
+      const minutes =
+        Math.floor(
+          seconds / 60
+        );
+
+
+      if (minutes === 1) {
+        return 'Updated 1 minute ago';
+      }
+
+
+      return `Updated ${minutes} minutes ago`;
+    }
+
+
+    async function refresh() {
+
+      try {
+
+        if (!token) {
+
+          throw new Error(
+            'Missing share token'
+          );
+        }
+
+
+        const rows =
+          await rpc(
+            'get_shared_session',
+            {
+              p_token: token,
+            }
+          );
+
+
+        if (!rows.length) {
+
+          app.innerHTML = `
+            <div class="status">
+              Link unavailable
+            </div>
+
+            <p class="muted">
+              This RideSafe share link is invalid
+              or the safety session no longer exists.
+            </p>
+          `;
+
+          return;
+        }
+
+
+        const session =
+          rows[0];
+
+
+        const ageSeconds =
+          session.latest_recorded_at
+            ? (
+                Date.now() -
+                new Date(
+                  session.latest_recorded_at
+                ).getTime()
+              ) / 1000
+            : null;
+
+
+        const updatesStopped =
+          ageSeconds !== null &&
+          ageSeconds > 120 &&
+          session.status === 'active';
+
+
+        const lowBattery =
+          session.latest_battery !== null &&
+          session.latest_battery <= 0.15;
+
+
+        const hasLocation =
+          session.latest_latitude !== null &&
+          session.latest_longitude !== null;
+
+
+        const mapsUrl =
+          hasLocation
+            ? `https://www.google.com/maps?q=${session.latest_latitude},${session.latest_longitude}`
+            : null;
+
+
+        const statusText =
+          session.status === 'active'
+            ? '🟢 Live location sharing'
+            : '✅ Location sharing ended';
+
+
+        app.innerHTML = `
+
+          <div class="status">
+            ${statusText}
+          </div>
+
+
+          <p class="muted">
+            ${
+              session.destination
+                ? `Destination: ${escapeHtml(session.destination)}`
+                : 'Destination not provided'
+            }
+          </p>
+
+
+          ${
+            updatesStopped
+
+              ? `
+                <p class="danger">
+                  📶 Location updates have stopped.
+
+                  This does not necessarily mean
+                  there is an emergency.
+                </p>
+              `
+
+              : ''
+          }
+
+
+          ${
+            lowBattery
+
+              ? `
+                <p class="danger">
+                  🔋 Phone battery was approximately
+
+                  ${Math.round(
+                    session.latest_battery * 100
+                  )}%
+
+                  at the last location update.
+                </p>
+              `
+
+              : ''
+          }
+
+
+          <div class="map">
+
+            ${
+              mapsUrl
+
+                ? `
+                  <div>
+
+                    <strong>
+                      Latest location
+                    </strong>
+
+                    <div class="updated muted">
+                      ${formatAge(
+                        session.latest_recorded_at
+                      )}
+                    </div>
+
+                    <br>
+
+                    <a
+                      class="button"
+                      href="${mapsUrl}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open Current Location
+                    </a>
+
+                  </div>
+                `
+
+                : `
+                  <div>
+                    Waiting for location…
+                  </div>
+                `
+            }
+
+          </div>
+
+
+          ${
+            session.latest_event_type
+
+              ? `
+                <p>
+                  <strong>
+                    Latest safety event:
+                  </strong>
+
+                  ${escapeHtml(
+                    session.latest_event_type
+                  )}
+                </p>
+              `
+
+              : ''
+          }
+
+        `;
+
+      } catch (error) {
+
+        console.error(
+          'RideSafe viewer error:',
+          error
+        );
+
+
+        app.innerHTML = `
+
+          <div class="status">
+            Could not load location
+          </div>
+
+          <p class="muted">
+            RideSafe could not load this safety
+            session. Please try again.
+          </p>
+
+        `;
+
+      }
+    }
+
+
+    refresh();
+
+    setInterval(
+      refresh,
+      15000
+    );
+
+  </script>
+
+</body>
+</html>
